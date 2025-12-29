@@ -35,17 +35,19 @@ npm install
 Open `src/index.ts` and modify:
 
 **a. Update the CONFIG section** (lines 6-12):
+
 ```typescript
 const CONFIG = {
-	serverName: 'your-mcp-name',           // Update with your server name
-	serverVersion: '1.0.0',                // Your version
+	serverName: 'your-mcp-name', // Update with your server name
+	serverVersion: '1.0.0', // Your version
 	serverDescription: 'Your MCP Server', // Description
-	protocolVersion: '2024-11-05',         // MCP protocol version
-	keepAliveInterval: 30000,              // SSE keep-alive interval (ms)
+	protocolVersion: '2024-11-05', // MCP protocol version
+	keepAliveInterval: 30000, // SSE keep-alive interval (ms)
 } as const;
 ```
 
 **b. Update package.json**:
+
 ```json
 {
 	"name": "your-mcp-name",
@@ -54,7 +56,16 @@ const CONFIG = {
 }
 ```
 
-**c. Update wrangler.jsonc**:
+**c. Set up wrangler.jsonc**:
+
+First, copy the example file:
+
+```bash
+cp wrangler.jsonc.example wrangler.jsonc
+```
+
+Then update `wrangler.jsonc`:
+
 ```jsonc
 {
 	"name": "your-mcp-name",  // This becomes your worker's name
@@ -106,6 +117,7 @@ npm run dev
 Your server will be available at `http://localhost:8787`
 
 Test the health endpoint:
+
 ```bash
 curl http://localhost:8787
 ```
@@ -136,7 +148,8 @@ After deployment, Cloudflare will provide your worker URL (e.g., `https://typing
 │   └── index.ts          # Main MCP server code
 ├── test/
 │   └── index.spec.ts     # Tests
-├── wrangler.jsonc        # Cloudflare Workers config
+├── wrangler.jsonc.example  # Example Cloudflare Workers config (copy to wrangler.jsonc)
+├── wrangler.jsonc        # Cloudflare Workers config (gitignored, create from example)
 ├── package.json          # Dependencies and scripts
 ├── tsconfig.json         # TypeScript config
 └── README.md             # This file
@@ -157,9 +170,10 @@ Each tool must implement the `Tool` interface:
 
 ```typescript
 interface Tool {
-	name: string;           // Unique tool identifier
-	description: string;    // What the tool does
-	inputSchema: {          // JSON Schema for input validation
+	name: string; // Unique tool identifier
+	description: string; // What the tool does
+	inputSchema: {
+		// JSON Schema for input validation
 		type: string;
 		properties: Record<string, { type: string; description: string }>;
 		required: string[];
@@ -175,8 +189,8 @@ The handler function receives the arguments and must return a `ToolResult`:
 ```typescript
 interface ToolResult {
 	content: Array<{
-		type: string;    // Usually 'text'
-		text: string;    // The response text
+		type: string; // Usually 'text'
+		text: string; // The response text
 	}>;
 }
 ```
@@ -224,19 +238,19 @@ handler: async (args, env) => {
 	await env.MY_KV.put('key', 'value');
 	const value = await env.MY_KV.get('key');
 	// ...
-}
+};
 
 // D1 Database (requires binding in wrangler.jsonc)
 handler: async (args, env) => {
 	const result = await env.DB.prepare('SELECT * FROM users').all();
 	// ...
-}
+};
 
 // R2 Storage (requires binding in wrangler.jsonc)
 handler: async (args, env) => {
 	await env.MY_BUCKET.put('file.txt', 'content');
 	// ...
-}
+};
 ```
 
 To use these features, update your `wrangler.jsonc` with the appropriate bindings.
@@ -245,26 +259,49 @@ To use these features, update your `wrangler.jsonc` with the appropriate binding
 
 ### Environment Variables
 
-Add secrets for API keys and sensitive data:
+You can add environment variables in two ways:
+
+#### Method 1: Using Wrangler CLI (Recommended for secrets)
+
+For sensitive data like API keys, use Wrangler secrets:
 
 ```bash
-# Using Wrangler CLI
+# Set a secret (will prompt for value)
 wrangler secret put API_KEY
 
-# Or in wrangler.jsonc for non-sensitive vars
+# Or set multiple secrets
+wrangler secret put API_KEY
+wrangler secret put DATABASE_URL
+```
+
+Secrets are encrypted and stored securely by Cloudflare. They are not visible in your code or configuration files.
+
+#### Method 2: Using wrangler.jsonc (For non-sensitive variables)
+
+For non-sensitive configuration values, you can add them directly to `wrangler.jsonc`:
+
+```jsonc
 {
 	"vars": {
-		"ENVIRONMENT": "production"
+		"ENVIRONMENT": "production",
+		"API_TIMEOUT": "5000",
+		"MAX_RETRIES": "3"
 	}
 }
 ```
 
-Access in your code:
+**Note**: Copy `wrangler.jsonc.example` to `wrangler.jsonc` and customize it for your local setup. The `wrangler.jsonc` file is gitignored to prevent committing sensitive data.
+
+#### Accessing Environment Variables in Code
+
+Both methods expose variables through the `env` parameter:
+
 ```typescript
 handler: async (args, env) => {
-	const apiKey = env.API_KEY;
+	const apiKey = env.API_KEY; // From wrangler secret
+	const environment = env.ENVIRONMENT; // From wrangler.jsonc vars
 	// ...
-}
+};
 ```
 
 ### CORS Configuration
@@ -293,6 +330,7 @@ const CONFIG = {
 ## Testing
 
 Run tests:
+
 ```bash
 npm test
 ```
@@ -337,6 +375,7 @@ Contributions are welcome! Please open an issue or submit a pull request.
 ## Support
 
 If you encounter issues:
+
 1. Check the Troubleshooting section above
 2. Review Cloudflare Workers logs: `wrangler tail`
 3. Open an issue on GitHub with:
