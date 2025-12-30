@@ -9,6 +9,9 @@ const CONFIG = {
 	serverDescription: 'TypingMind MCP Cloudflare Starter',
 	protocolVersion: '2024-11-05',
 	keepAliveInterval: 30000, // 30 seconds
+	// API Key Authentication
+	requireApiKey: true, // Set to false to disable API key requirement
+	apiKeyHeader: 'X-API-Key' as 'X-API-Key' | 'Authorization', // Header name to check for API key (alternative: 'Authorization')
 } as const;
 
 /**
@@ -30,7 +33,7 @@ interface Tool {
 		properties: Record<string, { type: string; description: string }>;
 		required: string[];
 	};
-	handler: (args: Record<string, unknown>) => Promise<ToolResult> | ToolResult;
+	handler: (args: Record<string, unknown>, env?: Env) => Promise<ToolResult> | ToolResult;
 }
 
 interface ToolResult {
@@ -93,6 +96,81 @@ const TOOLS: Tool[] = [
  * ============================================================================
  */
 
+/**
+ * ============================================================================
+ * API KEY VALIDATION
+ * ============================================================================
+ */
+function validateApiKey(request: Request, env: Env): { valid: boolean; error?: Response } {
+	if (!CONFIG.requireApiKey) {
+		return { valid: true };
+	}
+
+	const apiKey = env.API_KEY;
+	if (!apiKey) {
+		console.error('API_KEY environment variable is not set');
+		return {
+			valid: false,
+			error: new Response(
+				JSON.stringify({
+					error: 'Server configuration error: API key not configured',
+				}),
+				{
+					status: 500,
+					headers: { 'Content-Type': 'application/json' },
+				}
+			),
+		};
+	}
+
+	// Check for API key in header
+	let providedKey: string | null = null;
+
+	if (CONFIG.apiKeyHeader === 'Authorization') {
+		const authHeader = request.headers.get('Authorization');
+		if (authHeader && authHeader.startsWith('Bearer ')) {
+			providedKey = authHeader.substring(7);
+		} else if (authHeader) {
+			providedKey = authHeader; // Allow just the key without Bearer prefix
+		}
+	} else {
+		providedKey = request.headers.get(CONFIG.apiKeyHeader);
+	}
+
+	if (!providedKey) {
+		return {
+			valid: false,
+			error: new Response(
+				JSON.stringify({
+					error: 'API key required',
+					message: `Please provide an API key in the ${CONFIG.apiKeyHeader} header`,
+				}),
+				{
+					status: 401,
+					headers: { 'Content-Type': 'application/json' },
+				}
+			),
+		};
+	}
+
+	if (providedKey !== apiKey) {
+		return {
+			valid: false,
+			error: new Response(
+				JSON.stringify({
+					error: 'Invalid API key',
+				}),
+				{
+					status: 401,
+					headers: { 'Content-Type': 'application/json' },
+				}
+			),
+		};
+	}
+
+	return { valid: true };
+}
+
 // Session interface for SSE connections
 interface Session {
 	writer: WritableStreamDefaultWriter<Uint8Array>;
@@ -103,14 +181,14 @@ interface Session {
 const sessions = new Map<string, Session>();
 
 export default {
-	async fetch(request: Request): Promise<Response> {
+	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
 
 		// CORS headers - modify if you need to restrict origins
 		const corsHeaders = {
 			'Access-Control-Allow-Origin': '*', // Change to specific domain if needed
 			'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-			'Access-Control-Allow-Headers': 'Content-Type, Accept',
+			'Access-Control-Allow-Headers': 'Content-Type, Accept, X-API-Key, Authorization',
 		};
 
 		console.log(`${request.method} ${url.pathname}`);
@@ -120,7 +198,7 @@ export default {
 			return new Response(null, { headers: corsHeaders });
 		}
 
-		// Health check endpoint
+		// Health check endpoint (no API key required)
 		if (url.pathname === '/' || url.pathname === '') {
 			return new Response(
 				JSON.stringify({
@@ -138,6 +216,19 @@ export default {
 					},
 				}
 			);
+		}
+
+		// Validate API key for all other endpoints (except health check)
+		const apiKeyValidation = validateApiKey(request, env);
+		if (!apiKeyValidation.valid) {
+			const errorText = await apiKeyValidation.error!.text();
+			return new Response(errorText, {
+				status: apiKeyValidation.error!.status,
+				headers: {
+					'Content-Type': 'application/json',
+					...corsHeaders,
+				},
+			});
 		}
 
 		// SSE endpoint - GET only
@@ -187,7 +278,7 @@ export default {
 		if (url.pathname === '/sse' && request.method === 'POST') {
 			console.log('Received POST to /sse - redirecting to message handler');
 			// Treat this as a direct message without session
-			return handleMessage(request, corsHeaders, null);
+			return handleMessage(request, corsHeaders, null, env);
 		}
 
 		// Messages endpoint with session
@@ -196,7 +287,7 @@ export default {
 			console.log('Received POST to /sse/message with sessionId:', sessionId);
 
 			const session = sessions.get(sessionId || '') ?? null;
-			return handleMessage(request, corsHeaders, session);
+			return handleMessage(request, corsHeaders, session, env);
 		}
 
 		return new Response('Not Found', {
@@ -207,7 +298,7 @@ export default {
 };
 
 // Centralized message handler
-async function handleMessage(request: Request, corsHeaders: Record<string, string>, session: Session | null) {
+async function handleMessage(request: Request, corsHeaders: Record<string, string>, session: Session | null, env: Env) {
 	try {
 		const body = await request.text();
 		console.log('Received body:', body);
@@ -275,7 +366,7 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 
 			if (tool) {
 				try {
-					const result = await tool.handler(args);
+					const result = await tool.handler(args, env);
 					response = {
 						jsonrpc: '2.0',
 						id: message.id,

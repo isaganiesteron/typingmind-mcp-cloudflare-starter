@@ -140,6 +140,60 @@ After deployment, Cloudflare will provide your worker URL (e.g., `https://typing
    - **Transport**: SSE
 4. Test the connection
 
+## API Key Authentication
+
+This template includes optional API key authentication to secure your MCP server.
+
+### Setup
+
+1. **Set the API key secret** (recommended for production):
+
+   ```bash
+   wrangler secret put API_KEY
+   ```
+
+   Enter your API key when prompted.
+
+2. **Configure authentication** in `src/index.ts`:
+   ```typescript
+   const CONFIG = {
+   	// ... other config ...
+   	requireApiKey: true, // Set to false to disable
+   	apiKeyHeader: 'X-API-Key', // or 'Authorization' for Bearer tokens
+   };
+   ```
+
+### Usage
+
+Include the API key in your requests:
+
+**Using X-API-Key header:**
+
+```bash
+curl -H "X-API-Key: your-api-key-here" https://your-worker.workers.dev/sse
+```
+
+**Using Authorization header (Bearer token):**
+
+```typescript
+// In src/index.ts, set: apiKeyHeader: 'Authorization'
+// Then use:
+curl -H "Authorization: Bearer your-api-key-here" https://your-worker.workers.dev/sse
+```
+
+### Disabling Authentication
+
+To disable API key requirement (not recommended for production):
+
+```typescript
+const CONFIG = {
+	requireApiKey: false,
+	// ...
+};
+```
+
+**Note:** The health check endpoint (`/`) does not require authentication.
+
 ## Project Structure
 
 ```
