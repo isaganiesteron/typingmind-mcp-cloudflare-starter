@@ -202,6 +202,7 @@ const CONFIG = {
 │   └── index.ts          # Main MCP server code
 ├── test/
 │   └── index.spec.ts     # Tests
+├── TEST_PROMPT.md        # Test prompts for TypingMind integration testing
 ├── wrangler.jsonc.example  # Example Cloudflare Workers config (copy to wrangler.jsonc)
 ├── wrangler.jsonc        # Cloudflare Workers config (gitignored, create from example)
 ├── package.json          # Dependencies and scripts
@@ -383,6 +384,8 @@ const CONFIG = {
 
 ## Testing
 
+### Unit Tests
+
 Run tests:
 
 ```bash
@@ -390,6 +393,10 @@ npm test
 ```
 
 The template includes Vitest with Cloudflare Workers test environment.
+
+### Integration Testing with TypingMind
+
+For testing your MCP server with TypingMind, see [TEST_PROMPT.md](./TEST_PROMPT.md) for a collection of test prompts that verify all your tools are working correctly. These prompts can be used directly in TypingMind to test your MCP server's functionality.
 
 ## Troubleshooting
 
