@@ -55,7 +55,7 @@ const TOOLS: Tool[] = [
 			},
 			required: ['name'],
 		},
-		handler: async (args) => ({
+		handler: async (args: Record<string, unknown>) => ({
 			content: [
 				{
 					type: 'text',
@@ -75,7 +75,7 @@ const TOOLS: Tool[] = [
 			},
 			required: ['a', 'b'],
 		},
-		handler: async (args) => {
+		handler: async (args: Record<string, unknown>) => {
 			const a = args.a as number;
 			const b = args.b as number;
 			return {
@@ -238,7 +238,7 @@ export default {
 			const encoder = new TextEncoder();
 
 			// Generate session ID
-			const sessionId = crypto.randomUUID().replace(/-/g, '');
+			const sessionId: string = crypto.randomUUID().replace(/-/g, '');
 
 			// Store session
 			sessions.set(sessionId, { writer, encoder });
@@ -349,7 +349,7 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 				jsonrpc: '2.0',
 				id: message.id,
 				result: {
-					tools: TOOLS.map((tool) => ({
+					tools: TOOLS.map((tool: Tool) => ({
 						name: tool.name,
 						description: tool.description,
 						inputSchema: tool.inputSchema,
@@ -362,7 +362,7 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 			const { name, arguments: args } = message.params;
 
 			// Find the tool by name
-			const tool = TOOLS.find((t) => t.name === name);
+			const tool = TOOLS.find((t: Tool) => t.name === name);
 
 			if (tool) {
 				try {
@@ -372,7 +372,7 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 						id: message.id,
 						result,
 					};
-				} catch (toolError) {
+				} catch (toolError: unknown) {
 					response = {
 						jsonrpc: '2.0',
 						id: message.id,
