@@ -202,6 +202,11 @@ const CONFIG = {
 │   └── index.ts          # Main MCP server code
 ├── test/
 │   └── index.spec.ts     # Tests
+├── postman/              # Postman collection for API testing
+│   ├── MCP Server.postman_collection.json
+│   ├── Local.postman_environment.json
+│   ├── Production.postman_environment.json
+│   └── README.md
 ├── TEST_PROMPT.md        # Test prompts for TypingMind integration testing
 ├── wrangler.jsonc.example  # Example Cloudflare Workers config (copy to wrangler.jsonc)
 ├── wrangler.jsonc        # Cloudflare Workers config (gitignored, create from example)
@@ -397,6 +402,18 @@ The template includes Vitest with Cloudflare Workers test environment.
 ### Integration Testing with TypingMind
 
 For testing your MCP server with TypingMind, see [TEST_PROMPT.md](./TEST_PROMPT.md) for a collection of test prompts that verify all your tools are working correctly. These prompts can be used directly in TypingMind to test your MCP server's functionality.
+
+### API Testing with Postman
+
+A Postman collection is included in the `postman/` directory for testing your MCP server locally and in production. See [postman/README.md](./postman/README.md) for setup and usage instructions.
+
+The collection includes:
+
+- Health check endpoint
+- MCP protocol messages (initialize, list tools, call tools)
+- Example requests for all default tools
+- Environment configurations for local and production
+- Support for API key authentication
 
 ## Troubleshooting
 

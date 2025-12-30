@@ -1,0 +1,438 @@
+{
+	"info": {
+		"_postman_id": "mcp-server-collection",
+		"name": "MCP Server",
+		"description": "Collection for testing the TypingMind MCP Cloudflare Starter server. Update the base URL in the environment variables to test locally or against deployed instances.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/",
+					"host": ["{{base_url}}"],
+					"path": [""]
+				},
+				"description": "Check the health status of the MCP server. This endpoint does not require authentication."
+			},
+			"response": []
+		},
+		{
+			"name": "SSE Connection",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "X-API-Key",
+						"value": "{{api_key}}",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/sse",
+					"host": ["{{base_url}}"],
+					"path": ["sse"]
+				},
+				"description": "Establish an SSE (Server-Sent Events) connection. The server will return a session ID in the event stream. Note: Postman may not display SSE streams properly - use curl or a dedicated SSE client for full testing."
+			},
+			"response": []
+		},
+		{
+			"name": "MCP Messages",
+			"item": [
+				{
+					"name": "Initialize",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Extract sessionId from response if this is the first request",
+									"// For subsequent requests, use the sessionId from the SSE connection",
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.result && response.result.protocolVersion) {",
+									"        pm.test(\"Initialize successful\", function () {",
+									"            pm.expect(response.jsonrpc).to.eql(\"2.0\");",
+									"            pm.expect(response.result.protocolVersion).to.exist;",
+									"        });",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "X-API-Key",
+								"value": "{{api_key}}",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"jsonrpc\": \"2.0\",\n    \"id\": 1,\n    \"method\": \"initialize\",\n    \"params\": {\n        \"protocolVersion\": \"2024-11-05\",\n        \"capabilities\": {},\n        \"clientInfo\": {\n            \"name\": \"postman\",\n            \"version\": \"1.0.0\"\n        }\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Initialize the MCP connection. This should be the first message sent to the server."
+					},
+					"response": []
+				},
+				{
+					"name": "Initialized Notification",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "X-API-Key",
+								"value": "{{api_key}}",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"jsonrpc\": \"2.0\",\n    \"method\": \"notifications/initialized\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Send the initialized notification after receiving the initialize response."
+					},
+					"response": []
+				},
+				{
+					"name": "List Tools",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"List tools successful\", function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.jsonrpc).to.eql(\"2.0\");",
+									"    pm.expect(response.result).to.have.property(\"tools\");",
+									"    pm.expect(response.result.tools).to.be.an(\"array\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "X-API-Key",
+								"value": "{{api_key}}",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"jsonrpc\": \"2.0\",\n    \"id\": 2,\n    \"method\": \"tools/list\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Get a list of all available tools from the MCP server."
+					},
+					"response": []
+				},
+				{
+					"name": "Call Tool - Hello",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Hello tool successful\", function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.jsonrpc).to.eql(\"2.0\");",
+									"    pm.expect(response.result).to.have.property(\"content\");",
+									"    pm.expect(response.result.content).to.be.an(\"array\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "X-API-Key",
+								"value": "{{api_key}}",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"jsonrpc\": \"2.0\",\n    \"id\": 3,\n    \"method\": \"tools/call\",\n    \"params\": {\n        \"name\": \"hello\",\n        \"arguments\": {\n            \"name\": \"World\"\n        }\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Call the hello tool with a name parameter."
+					},
+					"response": []
+				},
+				{
+					"name": "Call Tool - Add",
+					"event": {
+						"listen": "test",
+						"script": {
+							"exec": [
+								"pm.test(\"Add tool successful\", function () {",
+								"    const response = pm.response.json();",
+								"    pm.expect(response.jsonrpc).to.eql(\"2.0\");",
+								"    pm.expect(response.result).to.have.property(\"content\");",
+								"    if (response.result.content && response.result.content[0]) {",
+								"        pm.expect(response.result.content[0]).to.have.property(\"text\");",
+								"    }",
+								"});"
+							],
+							"type": "text/javascript"
+						}
+					},
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "X-API-Key",
+								"value": "{{api_key}}",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"jsonrpc\": \"2.0\",\n    \"id\": 4,\n    \"method\": \"tools/call\",\n    \"params\": {\n        \"name\": \"add\",\n        \"arguments\": {\n            \"a\": 15,\n            \"b\": 27\n        }\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Call the add tool with two numbers."
+					},
+					"response": []
+				},
+				{
+					"name": "Call Tool - Add (Decimals)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "X-API-Key",
+								"value": "{{api_key}}",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"jsonrpc\": \"2.0\",\n    \"id\": 5,\n    \"method\": \"tools/call\",\n    \"params\": {\n        \"name\": \"add\",\n        \"arguments\": {\n            \"a\": 123.5,\n            \"b\": 456.7\n        }\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/sse",
+							"host": ["{{base_url}}"],
+							"path": ["sse"]
+						},
+						"description": "Call the add tool with decimal numbers."
+					},
+					"response": []
+				}
+			],
+			"description": "MCP protocol messages for interacting with the server."
+		},
+		{
+			"name": "SSE with Session",
+			"item": [
+				{
+					"name": "Initialize (with sessionId)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "X-API-Key",
+								"value": "{{api_key}}",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"jsonrpc\": \"2.0\",\n    \"id\": 1,\n    \"method\": \"initialize\",\n    \"params\": {\n        \"protocolVersion\": \"2024-11-05\",\n        \"capabilities\": {},\n        \"clientInfo\": {\n            \"name\": \"postman\",\n            \"version\": \"1.0.0\"\n        }\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/sse/message?sessionId={{session_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["sse", "message"],
+							"query": [
+								{
+									"key": "sessionId",
+									"value": "{{session_id}}",
+									"description": "Session ID from SSE connection"
+								}
+							]
+						},
+						"description": "Initialize using an active SSE session. First establish an SSE connection (GET /sse) to get a sessionId, then use that sessionId here."
+					},
+					"response": []
+				},
+				{
+					"name": "List Tools (with sessionId)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "X-API-Key",
+								"value": "{{api_key}}",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"jsonrpc\": \"2.0\",\n    \"id\": 2,\n    \"method\": \"tools/list\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/sse/message?sessionId={{session_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["sse", "message"],
+							"query": [
+								{
+									"key": "sessionId",
+									"value": "{{session_id}}",
+									"description": "Session ID from SSE connection"
+								}
+							]
+						},
+						"description": "List tools using an active SSE session."
+					},
+					"response": []
+				}
+			],
+			"description": "Requests that use an active SSE session. First establish an SSE connection (GET /sse) to get a sessionId."
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8787",
+			"type": "string"
+		},
+		{
+			"key": "api_key",
+			"value": "your-api-key-here",
+			"type": "string"
+		},
+		{
+			"key": "session_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+
