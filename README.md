@@ -10,6 +10,7 @@ A production-ready starter template for building Model Context Protocol (MCP) se
 - **Modular Tools**: Easy-to-extend tool system with clear separation of concerns
 - **Production Ready**: Includes error handling, CORS, health checks, and session management
 - **TypingMind Compatible**: Tested and working with TypingMind MCP integration
+- **Postman Collection**: Ready-to-use API testing collection with local and production environments
 
 ## Quick Start
 
