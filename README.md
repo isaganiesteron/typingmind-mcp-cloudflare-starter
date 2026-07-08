@@ -1,10 +1,10 @@
 # TypingMind MCP Cloudflare Starter
 
-A production-ready starter template for building Model Context Protocol (MCP) servers on Cloudflare Workers, specifically designed for TypingMind integration. This template provides SSE (Server-Sent Events) support, proper CORS handling, and a clean architecture for adding custom tools.
+A production-ready starter template for building Model Context Protocol (MCP) servers on Cloudflare Workers, specifically designed for TypingMind integration. This template provides both SSE (Server-Sent Events) and Streamable HTTP transport support, proper CORS handling, and a clean architecture for adding custom tools.
 
 ## Features
 
-- **SSE Support**: Real-time communication with MCP clients via Server-Sent Events
+- **Dual Transport Support**: SSE (`/sse`) and Streamable HTTP (`/mcp`) transports — clients can use whichever they prefer
 - **Cloudflare Workers**: Serverless deployment with global edge network
 - **TypeScript**: Full type safety and excellent developer experience
 - **Modular Tools**: Easy-to-extend tool system with clear separation of concerns
@@ -135,10 +135,18 @@ After deployment, Cloudflare will provide your worker URL (e.g., `https://typing
 
 1. Deploy your MCP server to Cloudflare Workers
 2. In TypingMind, go to Settings → MCP Servers
-3. Add a new server:
+3. Add a new server using either transport:
+
+   **Option A — Streamable HTTP (recommended for newer clients):**
    - **Name**: Your MCP Server
-   - **URL**: Your Cloudflare Worker URL (e.g., `https://typingmind-mcp-cloudflare-starter.YOUR_SUBDOMAIN.workers.dev/sse`)
+   - **URL**: `https://typingmind-mcp-cloudflare-starter.YOUR_SUBDOMAIN.workers.dev/mcp`
+   - **Transport**: Streamable HTTP
+
+   **Option B — SSE:**
+   - **Name**: Your MCP Server
+   - **URL**: `https://typingmind-mcp-cloudflare-starter.YOUR_SUBDOMAIN.workers.dev/sse`
    - **Transport**: SSE
+
 4. Test the connection
 
 ## API Key Authentication
@@ -218,10 +226,35 @@ const CONFIG = {
 
 ## API Endpoints
 
-- `GET /` - Health check endpoint
-- `GET /sse` - SSE endpoint for establishing connection
-- `POST /sse` - Direct HTTP endpoint (for clients that don't use SSE)
-- `POST /sse/message?sessionId={id}` - Message endpoint for active SSE sessions
+### Health check
+
+- `GET /` - Returns server info and the list of available transport endpoints (no API key required)
+
+### SSE transport
+
+- `GET /sse` - Establishes an SSE connection; responds with an `endpoint` event containing the session-specific message URL
+- `POST /sse` - Direct HTTP fallback (for clients that don't open an SSE stream)
+- `POST /sse/message?sessionId={id}` - Sends a JSON-RPC message on an active SSE session
+
+### Streamable HTTP transport (`/mcp`)
+
+- `POST /mcp` — Send a JSON-RPC message. On an `initialize` request the server generates a new session ID and returns it in the `Mcp-Session-Id` response header. All subsequent requests must include that header.
+- `DELETE /mcp` — Terminate a session. Requires a valid `Mcp-Session-Id` header; returns `200` on success or `404` if the header is missing/invalid.
+
+**Session flow for `/mcp`:**
+
+```
+1. POST /mcp  { method: "initialize", ... }
+   ← 200  Mcp-Session-Id: <uuid>   + initialize result
+
+2. POST /mcp  { method: "tools/list", ... }
+   → Mcp-Session-Id: <uuid>
+   ← 200  tools list
+
+3. DELETE /mcp
+   → Mcp-Session-Id: <uuid>
+   ← 200
+```
 
 ## Tool Development Guide
 
@@ -372,8 +405,9 @@ By default, CORS allows all origins (`*`). To restrict:
 ```typescript
 const corsHeaders = {
 	'Access-Control-Allow-Origin': 'https://yourdomain.com',
-	'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-	'Access-Control-Allow-Headers': 'Content-Type, Accept',
+	'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+	'Access-Control-Allow-Headers': 'Content-Type, Accept, X-API-Key, Authorization, Mcp-Session-Id, MCP-Protocol-Version',
+	'Access-Control-Expose-Headers': 'Mcp-Session-Id',
 };
 ```
 

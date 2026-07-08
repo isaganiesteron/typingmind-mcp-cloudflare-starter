@@ -14,6 +14,8 @@ const CONFIG = {
 	apiKeyHeader: 'X-API-Key' as 'X-API-Key' | 'Authorization', // Header name to check for API key (alternative: 'Authorization')
 } as const;
 
+const MCP_SESSION_HEADER = 'Mcp-Session-Id';
+
 /**
  * ============================================================================
  * TOOL DEFINITIONS - Add your custom tools here
@@ -180,6 +182,10 @@ interface Session {
 // Store active sessions
 const sessions = new Map<string, Session>();
 
+function isValidMcpSessionId(sessionId: string): boolean {
+	return sessionId.length > 0 && sessionId.length <= 128;
+}
+
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
@@ -187,8 +193,9 @@ export default {
 		// CORS headers - modify if you need to restrict origins
 		const corsHeaders = {
 			'Access-Control-Allow-Origin': '*', // Change to specific domain if needed
-			'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-			'Access-Control-Allow-Headers': 'Content-Type, Accept, X-API-Key, Authorization',
+			'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+			'Access-Control-Allow-Headers': 'Content-Type, Accept, X-API-Key, Authorization, Mcp-Session-Id, MCP-Protocol-Version',
+			'Access-Control-Expose-Headers': 'Mcp-Session-Id',
 		};
 
 		console.log(`${request.method} ${url.pathname}`);
@@ -207,6 +214,7 @@ export default {
 					status: 'running',
 					endpoints: {
 						sse: '/sse',
+						mcp: '/mcp',
 					},
 				}),
 				{
@@ -290,6 +298,11 @@ export default {
 			return handleMessage(request, corsHeaders, session, env);
 		}
 
+		// Streamable HTTP MCP endpoint
+		if (url.pathname === '/mcp' && (request.method === 'POST' || request.method === 'DELETE')) {
+			return handleMcpRequest(request, corsHeaders, env);
+		}
+
 		return new Response('Not Found', {
 			status: 404,
 			headers: corsHeaders,
@@ -297,10 +310,33 @@ export default {
 	},
 };
 
-// Centralized message handler
-async function handleMessage(request: Request, corsHeaders: Record<string, string>, session: Session | null, env: Env) {
+// Centralized message handler (SSE entry point)
+async function handleMessage(
+	request: Request,
+	corsHeaders: Record<string, string>,
+	session: Session | null,
+	env: Env,
+	endpointLabel = 'unknown'
+) {
+	const body = await request.text();
+	return handleMessageFromBody(body, corsHeaders, session, env, endpointLabel, null);
+}
+
+// Core MCP message dispatch logic
+async function handleMessageFromBody(
+	body: string,
+	corsHeaders: Record<string, string>,
+	session: Session | null,
+	env: Env,
+	endpointLabel: string,
+	mcpSessionId: string | null
+) {
+	const responseHeaders: Record<string, string> = { ...corsHeaders };
+	if (mcpSessionId) {
+		responseHeaders[MCP_SESSION_HEADER] = mcpSessionId;
+	}
+
 	try {
-		const body = await request.text();
 		console.log('Received body:', body);
 
 		let message;
@@ -319,7 +355,7 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 				status: 400,
 				headers: {
 					'Content-Type': 'application/json',
-					...corsHeaders,
+					...responseHeaders,
 				},
 			});
 		}
@@ -398,7 +434,7 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 			console.log('Received initialized notification');
 			return new Response(null, {
 				status: 204,
-				headers: corsHeaders,
+				headers: responseHeaders,
 			});
 		} else {
 			response = {
@@ -428,14 +464,14 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 				status: 200,
 				headers: {
 					'Content-Type': 'application/json',
-					...corsHeaders,
+					...responseHeaders,
 				},
 			});
 		}
 
 		return new Response(null, {
 			status: 204,
-			headers: corsHeaders,
+			headers: responseHeaders,
 		});
 	} catch (error: unknown) {
 		console.error('Message handling error:', error);
@@ -450,8 +486,57 @@ async function handleMessage(request: Request, corsHeaders: Record<string, strin
 			status: 500,
 			headers: {
 				'Content-Type': 'application/json',
-				...corsHeaders,
+				...responseHeaders,
 			},
 		});
 	}
+}
+
+// Streamable HTTP MCP transport handler
+async function handleMcpRequest(
+	request: Request,
+	corsHeaders: Record<string, string>,
+	env: Env
+): Promise<Response> {
+	const sessionIdHeader = request.headers.get(MCP_SESSION_HEADER);
+
+	// Handle session termination
+	if (request.method === 'DELETE') {
+		if (sessionIdHeader && isValidMcpSessionId(sessionIdHeader)) {
+			return new Response(null, { status: 200, headers: corsHeaders });
+		}
+		return new Response(null, { status: 404, headers: corsHeaders });
+	}
+
+	// Parse body early to check method
+	const body = await request.text();
+	let message: { method?: string; id?: unknown };
+	try {
+		message = JSON.parse(body);
+	} catch {
+		return new Response(
+			JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }),
+			{ status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+		);
+	}
+
+	// Generate session ID on initialize; require it on all other methods
+	let mcpSessionId: string | null = sessionIdHeader;
+	if (message.method === 'initialize') {
+		mcpSessionId = crypto.randomUUID();
+	} else if (!sessionIdHeader || !isValidMcpSessionId(sessionIdHeader)) {
+		const errorMessage = sessionIdHeader ? 'Invalid Mcp-Session-Id' : 'Mcp-Session-Id header required';
+		return new Response(JSON.stringify({ error: errorMessage }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json', ...corsHeaders },
+		});
+	}
+
+	// Attach session ID to response headers
+	const responseHeaders: Record<string, string> = { ...corsHeaders };
+	if (mcpSessionId) {
+		responseHeaders[MCP_SESSION_HEADER] = mcpSessionId;
+	}
+
+	return handleMessageFromBody(body, responseHeaders, null, env, 'mcp POST', mcpSessionId);
 }
